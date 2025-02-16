@@ -13,7 +13,7 @@ export function SiteFooter() {
   return (
     <footer className="mt-40 space-y-4 p-4">
       <SiteFooterSitemap />
-      <SiteFooterExtra />
+      {/* <SiteFooterExtra /> */}
     </footer>
   )
 }
@@ -57,11 +57,11 @@ function SiteFooterExtra() {
       )}
     >
       <p className="text-center text-sm sm:text-left">
-        <AnchorFooter href="https://github.com/dogokit">Dogokit</AnchorFooter>
+        <AnchorFooter href="https://github.com/ibro1">AppTemp</AnchorFooter>
         <span> is built by </span>
-        <AnchorFooter href="https://github.com/mhaidarhanif">M Haidar Hanif</AnchorFooter>
+        <AnchorFooter href="https://github.com/ibro1">Ibro1</AnchorFooter>
         <span> from the </span>
-        <AnchorFooter href="https://github.com/allnimal">Allnimal</AnchorFooter> group.
+        <AnchorFooter href="https://linkfa.de/ibro1">Netlinko Technologies</AnchorFooter> group.
       </p>
 
       <ThemeMenu variant="ghost" />

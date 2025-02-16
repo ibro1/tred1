@@ -29,11 +29,12 @@ generator client {
 model User {
   id String @id @default(cuid())
 
-  email    String  @unique
+  email    String?  @unique
   username String  @unique
   phone    String? @unique // numeric string
+  walletAddress String? @unique // Solana wallet address
 
-  fullname String
+  fullname String?
   nickname String?
 
   password    Password?
@@ -52,6 +53,7 @@ model User {
   @@index([email])
   @@index([username])
   @@index([phone])
+  @@index([walletAddress])
 }
 
 model UserProfile {
@@ -154,6 +156,29 @@ model UserImage {
 
   @@unique([id, userId])
   @@index([userId])
+}
+
+// -----------------------------------------------------------------------------
+// Wallet Authentication
+// -----------------------------------------------------------------------------
+
+model WalletNonce {
+  id String @id @default(cuid())
+
+  publicKey String @unique
+  nonce     String
+  timestamp BigInt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publicKey])
+}
+
+model Nonce {
+  id        String   @id @default(cuid())
+  value     String   @unique
+  createdAt DateTime @default(now())
 }
 
 // -----------------------------------------------------------------------------

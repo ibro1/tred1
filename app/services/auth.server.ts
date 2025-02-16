@@ -3,12 +3,21 @@ import { createCookieSessionStorage } from "@remix-run/node"
 import { Authenticator } from "remix-auth"
 
 import { type modelUser } from "~/models/user.server"
-import { AuthStrategies } from "~/services/auth-strategies"
 import { formStrategy } from "~/services/auth-strategies/form.strategy"
 import { githubStrategy } from "~/services/auth-strategies/github.strategy"
 import { googleStrategy } from "~/services/auth-strategies/google.strategy"
+import { SolanaStrategy } from "~/services/auth-strategies/solana.strategy"
 import { convertDaysToSeconds } from "~/utils/datetime"
 import { isProduction, parsedEnv } from "~/utils/env.server"
+
+export const AuthStrategies = {
+  FORM: "form",
+  GITHUB: "github",
+  GOOGLE: "google",
+  SOLANA: "solana",
+} as const;
+
+export type AuthStrategy = (typeof AuthStrategies)[keyof typeof AuthStrategies];
 
 export const authStorage = createCookieSessionStorage({
   cookie: {
@@ -36,8 +45,6 @@ export interface UserSession {
 export interface UserData
   extends NonNullable<Prisma.PromiseReturnType<typeof modelUser.getForSession>> {}
 
-export type AuthStrategy = (typeof AuthStrategies)[keyof typeof AuthStrategies]
-
 /**
  * authService
  *
@@ -49,6 +56,8 @@ export type AuthStrategy = (typeof AuthStrategies)[keyof typeof AuthStrategies]
  */
 export const authService = new Authenticator<UserSession>(authStorage)
 
+// Initialize strategies
 authService.use(formStrategy, AuthStrategies.FORM)
 authService.use(githubStrategy, AuthStrategies.GITHUB)
 authService.use(googleStrategy, AuthStrategies.GOOGLE)
+authService.use(new SolanaStrategy(), AuthStrategies.SOLANA)
