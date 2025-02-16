@@ -1,5 +1,5 @@
 import { webcrypto } from "crypto";
-import { sign } from "@solana/web3.js";
+import * as nacl from "@solana/web3.js";
 import { generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { db } from "~/libs/db.server";
@@ -33,7 +33,7 @@ export async function verifySignature(
       publicKey.split(",").map((num) => parseInt(num))
     );
 
-    return sign.detached.verify(encodedMessage, signatureUint8, publicKeyUint8);
+    return nacl.sign.detached.verify(encodedMessage, signatureUint8, publicKeyUint8);
   } catch (error) {
     console.error("Error verifying signature:", error);
     return false;
