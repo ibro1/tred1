@@ -26,7 +26,27 @@ export default {
 
   browserNodeBuiltinsPolyfill: {
     modules: {
+      // Core modules
       punycode: true,
+      http: true,
+      https: true,
+      url: true,
+      buffer: true,
+      stream: true,
+      crypto: true,
+      
+      // Additional required modules
+      string_decoder: true,
+      assert: true,
+      zlib: true,
+      util: true,
+      events: true,
+      
+      // Common dependencies
+      os: true,
+      path: true,
+      fs: true,
+      vm: true,
     },
   },
 
