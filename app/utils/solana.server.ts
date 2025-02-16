@@ -1,6 +1,6 @@
 import { webcrypto } from "crypto";
 import bs58 from "bs58";
-import * as nacl from "tweetnacl";
+import nacl from "tweetnacl";
 import { generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { db } from "~/libs/db.server";
@@ -28,12 +28,11 @@ export async function verifySignature(
   try {
     const encodedMessage = new TextEncoder().encode(message);
     const signatureUint8 = Uint8Array.from(signature.split(',').map(Number));
-    // Use bs58 default import
     const publicKeyUint8 = bs58.decode(publicKey);
 
-    return nacl.sign.detached.verify(
-      encodedMessage,
+    return nacl.verify(
       signatureUint8,
+      encodedMessage,
       publicKeyUint8
     );
   } catch (error) {
