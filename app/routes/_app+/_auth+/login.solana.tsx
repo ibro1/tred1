@@ -1,7 +1,10 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useActionData } from "@remix-run/react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
+import { useEffect } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const nonce = await generateNonce();
@@ -23,6 +26,49 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function SolanaLogin() {
   const { nonce } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const { publicKey, signMessage, connected } = useWallet();
+
+  useEffect(() => {
+    const authenticate = async () => {
+      if (connected && publicKey) {
+        try {
+          const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
+          const encodedMessage = new TextEncoder().encode(message);
+          const signature = await signMessage?.(encodedMessage);
+          
+          if (!signature) {
+            throw new Error("Failed to sign message");
+          }
+
+          const form = document.createElement("form");
+          form.method = "post";
+          form.style.display = "none";
+          
+          const fields = {
+            publicKey: publicKey.toBase58(),
+            signature: Array.from(signature).toString(),
+            message,
+            nonce,
+          };
+          
+          Object.entries(fields).forEach(([key, value]) => {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+          });
+          
+          document.body.appendChild(form);
+          form.submit();
+        } catch (error) {
+          console.error("Error authenticating:", error);
+        }
+      }
+    };
+
+    authenticate();
+  }, [connected, publicKey, signMessage, nonce]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
@@ -38,128 +84,7 @@ export default function SolanaLogin() {
         </div>
 
         <div className="mt-8 space-y-4">
-          <button
-            onClick={async () => {
-              try {
-                const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
-                
-                // Connect wallet and get public key
-                // const publicKey = await connectWallet();
-                
-                // Sign message
-                // const signature = await signMessage(message);
-                
-                // Submit form with credentials
-                const form = document.createElement("form");
-                form.method = "post";
-                form.style.display = "none";
-                
-                const fields = {
-                  publicKey: "placeholder", // Replace with actual public key
-                  signature: "placeholder", // Replace with actual signature
-                  message,
-                  nonce,
-                };
-                
-                Object.entries(fields).forEach(([key, value]) => {
-                  const input = document.createElement("input");
-                  input.type = "hidden";
-                  input.name = key;
-                  input.value = value;
-                  form.appendChild(input);
-                });
-                
-                document.body.appendChild(form);
-                form.submit();
-              } catch (error) {
-                console.error("Error connecting wallet:", error);
-              }
-            }}
-            className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-          >
-            Connect Wallet
-          </button>
-
-          <button
-            onClick={async () => {
-              // Implement create new wallet logic using generateWallet
-              try {
-                const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
-                // Generate new wallet logic here
-                // const { publicKey, mnemonic } = await generateWallet();
-                // Show mnemonic to user and ask them to save it
-                // const signature = await signMessage(message);
-                
-                // Submit form with credentials
-                const form = document.createElement("form");
-                form.method = "post";
-                form.style.display = "none";
-                
-                const fields = {
-                  publicKey: "placeholder", // Replace with actual public key
-                  signature: "placeholder", // Replace with actual signature
-                  message,
-                  nonce,
-                };
-                
-                Object.entries(fields).forEach(([key, value]) => {
-                  const input = document.createElement("input");
-                  input.type = "hidden";
-                  input.name = key;
-                  input.value = value;
-                  form.appendChild(input);
-                });
-                
-                document.body.appendChild(form);
-                form.submit();
-              } catch (error) {
-                console.error("Error creating wallet:", error);
-              }
-            }}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-          >
-            Create New Wallet
-          </button>
-
-          <button
-            onClick={async () => {
-              // Implement import wallet logic
-              try {
-                const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
-                // Import wallet logic here
-                // const publicKey = await importWallet();
-                // const signature = await signMessage(message);
-                
-                // Submit form with credentials
-                const form = document.createElement("form");
-                form.method = "post";
-                form.style.display = "none";
-                
-                const fields = {
-                  publicKey: "placeholder", // Replace with actual public key
-                  signature: "placeholder", // Replace with actual signature
-                  message,
-                  nonce,
-                };
-                
-                Object.entries(fields).forEach(([key, value]) => {
-                  const input = document.createElement("input");
-                  input.type = "hidden";
-                  input.name = key;
-                  input.value = value;
-                  form.appendChild(input);
-                });
-                
-                document.body.appendChild(form);
-                form.submit();
-              } catch (error) {
-                console.error("Error importing wallet:", error);
-              }
-            }}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-          >
-            Import Existing Wallet
-          </button>
+          <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
         </div>
       </div>
     </div>

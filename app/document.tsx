@@ -1,6 +1,7 @@
 import { Links, LiveReload, Meta, Scripts, ScrollRestoration } from "@remix-run/react"
 
 import { NProgress } from "~/components/shared/nprogress"
+import { SolanaProvider } from "~/components/shared/solana-provider"
 import { ThemeHead, useTheme, type Theme } from "~/components/shared/theme"
 import { configSite } from "~/configs/site"
 import { useRootLoaderData } from "~/hooks/use-root-loader-data"
@@ -26,7 +27,9 @@ export function Document({
       </head>
 
       <body id="__remix">
-        {children}
+        <SolanaProvider>
+          {children}
+        </SolanaProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.ENV = ${JSON.stringify(ENV)}`,
