@@ -1,186 +1,92 @@
-import { conform, useForm } from "@conform-to/react"
-import { getFieldsetConstraint, parse } from "@conform-to/zod"
-import { json, type ActionFunctionArgs, type MetaFunction } from "@remix-run/node"
-import { Form, useActionData, useNavigation, useSearchParams } from "@remix-run/react"
-import { z } from "zod"
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useActionData } from "@remix-run/react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { generateNonce } from "~/utils/solana.server";
+import { authService } from "~/services/auth.server";
+import { useEffect } from "react";
 
-import { IconMatch } from "~/components/libs/icon"
-import { AuthButtons } from "~/components/shared/auth-buttons"
-import { SectionOr } from "~/components/shared/section-or"
-import { ButtonLoading } from "~/components/ui/button-loading"
-import { FormDescription, FormErrors, FormField, FormLabel } from "~/components/ui/form"
-import { Input } from "~/components/ui/input"
-import { InputPassword } from "~/components/ui/input-password"
-import { LinkText } from "~/components/ui/link-text"
-import { useAppMode } from "~/hooks/use-app-mode"
-import { db } from "~/libs/db.server"
-import { schemaUserLogIn } from "~/schemas/user"
-import { authService } from "~/services/auth.server"
-import { checkPassword } from "~/utils/encryption.server"
-import { createMeta } from "~/utils/meta"
-import { createTimer } from "~/utils/timer"
-
-export const meta: MetaFunction = () =>
-  createMeta({
-    title: `Log In`,
-    description: `Continue to dashboard`,
-  })
-
-export const loader = ({ request }: ActionFunctionArgs) => {
-  return authService.isAuthenticated(request, {
-    successRedirect: "/user/dashboard",
-  })
+export async function loader({ request }: LoaderFunctionArgs) {
+  const nonce = await generateNonce();
+  return json({ nonce });
 }
 
-export default function SignUpRoute() {
-  const actionData = useActionData<typeof action>()
-  const { isModeDevelopment } = useAppMode()
+export async function action({ request }: ActionFunctionArgs) {
+  try {
+    const user = await authService.authenticate("solana", request, {
+      successRedirect: "/dashboard",
+      failureRedirect: "/login/solana",
+    });
+    return json({ user });
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, { status: 400 });
+  }
+}
 
-  const navigation = useNavigation()
-  const isSubmitting = navigation.state === "submitting"
+export default function SolanaLogin() {
+  const { nonce } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const { publicKey, signMessage, connected } = useWallet();
 
-  const [searchParams] = useSearchParams()
-  const redirectTo = searchParams.get("redirectTo")
+  useEffect(() => {
+    const authenticate = async () => {
+      if (connected && publicKey) {
+        try {
+          const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
+          const encodedMessage = new TextEncoder().encode(message);
+          const signature = await signMessage?.(encodedMessage);
+          
+          if (!signature) {
+            throw new Error("Failed to sign message");
+          }
 
-  const [form, { email, password }] = useForm<z.infer<typeof schemaUserLogIn>>({
-    id: "login",
-    lastSubmission: actionData?.submission,
-    shouldRevalidate: "onInput",
-    constraint: getFieldsetConstraint(schemaUserLogIn),
-    onValidate({ formData }) {
-      return parse(formData, { schema: schemaUserLogIn })
-    },
-    defaultValue: isModeDevelopment
-      ? { email: "example@example.com", password: "exampleexample" }
-      : {},
-  })
+          const form = document.createElement("form");
+          form.method = "post";
+          form.style.display = "none";
+          
+          const fields = {
+            publicKey: publicKey.toBase58(),
+            signature: Array.from(signature).toString(),
+            message,
+            nonce,
+          };
+          
+          Object.entries(fields).forEach(([key, value]) => {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+          });
+          
+          document.body.appendChild(form);
+          form.submit();
+        } catch (error) {
+          console.error("Error authenticating:", error);
+        }
+      }
+    };
+
+    authenticate();
+  }, [connected, publicKey, signMessage, nonce]);
 
   return (
-    <div className="site-container">
-      <div className="site-section-md space-y-8">
-        <header className="site-header">
-          <h2 className="inline-flex items-center gap-2">
-            <IconMatch icon="sign-in" />
-            <span>Log in to continue</span>
-          </h2>
-          <p>
-            Don't have an account?{" "}
-            <LinkText to="/signup" className="transition hover:text-primary">
-              Sign up
-            </LinkText>
+    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+      <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">Connect with Solana</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Choose how you want to connect your Solana wallet
           </p>
-        </header>
+          {actionData?.error && (
+            <p className="mt-2 text-sm text-red-600">{actionData.error}</p>
+          )}
+        </div>
 
-        <section className="space-y-2">
-          <AuthButtons />
-        </section>
-
-        <SectionOr />
-
-        <section>
-          <Form
-            replace
-            action="/login"
-            method="POST"
-            className="flex flex-col gap-2"
-            {...form.props}
-          >
-            <fieldset className="flex flex-col gap-2" disabled={isSubmitting}>
-              {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
-
-              <FormField>
-                <FormLabel htmlFor={email.id}>Email</FormLabel>
-                <Input
-                  {...conform.input(email, {
-                    type: "email",
-                    description: true,
-                  })}
-                  id={email.id}
-                  placeholder="yourname@example.com"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoFocus={email.error ? true : undefined}
-                  required
-                />
-                <FormErrors>{email}</FormErrors>
-              </FormField>
-
-              <FormField>
-                <FormLabel htmlFor={password.id}>Password</FormLabel>
-                <InputPassword
-                  {...conform.input(password, {
-                    description: true,
-                  })}
-                  id={password.id}
-                  placeholder="Enter password"
-                  autoComplete="current-password"
-                  autoFocus={password.error ? true : undefined}
-                  required
-                  className="w-full"
-                />
-                <FormDescription id={password.descriptionId}>At least 8 characters</FormDescription>
-                <FormErrors>{password}</FormErrors>
-              </FormField>
-
-              <ButtonLoading type="submit" loadingText="Logging In..." isLoading={isSubmitting}>
-                Log In
-              </ButtonLoading>
-            </fieldset>
-          </Form>
-        </section>
+        <div className="mt-8 space-y-4">
+          <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
+        </div>
       </div>
     </div>
-  )
-}
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const timer = createTimer()
-  const clonedRequest = request.clone()
-  const formData = await clonedRequest.formData()
-
-  const submission = await parse(formData, {
-    async: true,
-    schema: schemaUserLogIn.superRefine(async (data, ctx) => {
-      const existingUser = await db.user.findUnique({
-        where: { email: data.email },
-        include: { password: true },
-      })
-      if (!existingUser) {
-        ctx.addIssue({
-          path: ["email"],
-          code: z.ZodIssueCode.custom,
-          message: "User with this email is not found",
-        })
-        return
-      }
-      if (!existingUser?.password) {
-        ctx.addIssue({
-          path: ["password"],
-          code: z.ZodIssueCode.custom,
-          message: "User cannot log in with a password. Try using 3rd party services below",
-        })
-        return
-      }
-
-      const isPasswordCorrect = await checkPassword(data.password, existingUser.password.hash)
-      if (!isPasswordCorrect) {
-        ctx.addIssue({
-          path: ["password"],
-          code: z.ZodIssueCode.custom,
-          message: "Password is incorrect",
-        })
-        return
-      }
-    }),
-  })
-
-  await timer.delay()
-
-  if (!submission.value || submission.intent !== "submit") {
-    return json({ status: "error", submission }, { status: 400 })
-  }
-
-  return authService.authenticate("form", request, {
-    successRedirect: "/user/dashboard",
-  })
+  );
 }
