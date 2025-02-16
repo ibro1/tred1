@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const nonce = await generateNonce();
@@ -15,7 +15,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const user = await authService.authenticate("solana", request, {
       successRedirect: "/dashboard",
-      failureRedirect: "/login/solana",
+      failureRedirect: "/login",
     });
     return json({ user });
   } catch (error) {
@@ -27,11 +27,13 @@ export default function SolanaLogin() {
   const { nonce } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { publicKey, signMessage, connected } = useWallet();
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   useEffect(() => {
     const authenticate = async () => {
-      if (connected && publicKey) {
+      if (connected && publicKey && !isAuthenticating) {
         try {
+          setIsAuthenticating(true);
           const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
           const encodedMessage = new TextEncoder().encode(message);
           const signature = await signMessage?.(encodedMessage);
@@ -40,35 +42,29 @@ export default function SolanaLogin() {
             throw new Error("Failed to sign message");
           }
 
-          const form = document.createElement("form");
-          form.method = "post";
-          form.style.display = "none";
-          
-          const fields = {
-            publicKey: publicKey.toBase58(),
-            signature: Array.from(signature).toString(),
-            message,
-            nonce,
-          };
-          
-          Object.entries(fields).forEach(([key, value]) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = key;
-            input.value = value;
-            form.appendChild(input);
+          const form = new FormData();
+          form.append("publicKey", publicKey.toBase58());
+          form.append("signature", Array.from(signature).toString());
+          form.append("message", message);
+          form.append("nonce", nonce);
+
+          const response = await fetch("/login", {
+            method: "POST",
+            body: form,
           });
-          
-          document.body.appendChild(form);
-          form.submit();
+
+          if (response.redirected) {
+            window.location.href = response.url;
+          }
         } catch (error) {
           console.error("Error authenticating:", error);
+          setIsAuthenticating(false);
         }
       }
     };
 
     authenticate();
-  }, [connected, publicKey, signMessage, nonce]);
+  }, [connected, publicKey, signMessage, nonce, isAuthenticating]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">

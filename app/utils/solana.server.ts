@@ -1,5 +1,6 @@
 import { webcrypto } from "crypto";
-import * as nacl from "@solana/web3.js";
+import * as bs58 from "bs58";
+import * as nacl from "tweetnacl";
 import { generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { db } from "~/libs/db.server";
@@ -26,14 +27,14 @@ export async function verifySignature(
 ): Promise<boolean> {
   try {
     const encodedMessage = new TextEncoder().encode(message);
-    const signatureUint8 = new Uint8Array(
-      signature.split(",").map((num) => parseInt(num))
-    );
-    const publicKeyUint8 = new Uint8Array(
-      publicKey.split(",").map((num) => parseInt(num))
-    );
+    const signatureUint8 = Uint8Array.from(signature.split(',').map(Number));
+    const publicKeyUint8 = bs58.decode(publicKey);
 
-    return nacl.sign.detached.verify(encodedMessage, signatureUint8, publicKeyUint8);
+    return nacl.sign.detached.verify(
+      encodedMessage,
+      signatureUint8,
+      publicKeyUint8
+    );
   } catch (error) {
     console.error("Error verifying signature:", error);
     return false;
