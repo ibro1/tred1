@@ -3,6 +3,9 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
+import { mnemonicToSeedSync } from '@scure/bip39';
+import { Keypair } from "@solana/web3.js";
+import { derivePath } from "ed25519-hd-key";
 import { db } from "~/libs/db.server";
 
 export async function generateNonce(): Promise<string> {
@@ -41,12 +44,18 @@ export async function verifySignature(
   }
 }
 
+function getKeypairFromMnemonic(mnemonic: string): Keypair {
+  const seed = mnemonicToSeedSync(mnemonic);
+  const derivedSeed = derivePath("m/44'/501'/0'/0'", seed).key;
+  return Keypair.fromSeed(derivedSeed);
+}
+
 export function generateWallet(): { mnemonic: string; publicKey: string } {
-  const mnemonic = generateMnemonic(wordlist); // Uses English wordlist for 12 words
-  // In a real implementation, you would derive the public key from the mnemonic
-  // For now, we'll return a placeholder
+  const mnemonic = generateMnemonic(wordlist);
+  const keypair = getKeypairFromMnemonic(mnemonic);
+  
   return {
     mnemonic,
-    publicKey: "placeholder", // This should be derived from the mnemonic
+    publicKey: keypair.publicKey.toBase58(),
   };
 }

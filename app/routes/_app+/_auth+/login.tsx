@@ -4,9 +4,17 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  // Check if user is already authenticated
+  const user = await authService.isAuthenticated(request);
+  if (user) {
+    throw new Response(null, {
+      status: 302,
+      headers: { Location: "/dashboard" },
+    });
+  }
   const nonce = await generateNonce();
   return json({ nonce });
 }
@@ -29,41 +37,38 @@ export default function SolanaLogin() {
   const { publicKey, signMessage, connected } = useWallet();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  useEffect(() => {
-    const authenticate = async () => {
-      if (connected && publicKey && !isAuthenticating) {
-        try {
-          setIsAuthenticating(true);
-          const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
-          const encodedMessage = new TextEncoder().encode(message);
-          const signature = await signMessage?.(encodedMessage);
-          
-          if (!signature) {
-            throw new Error("Failed to sign message");
-          }
+  const handleSignIn = useCallback(async () => {
+    if (!connected || !publicKey || isAuthenticating) return;
 
-          const form = new FormData();
-          form.append("publicKey", publicKey.toBase58());
-          form.append("signature", Array.from(signature).toString());
-          form.append("message", message);
-          form.append("nonce", nonce);
-
-          const response = await fetch("/login", {
-            method: "POST",
-            body: form,
-          });
-
-          if (response.redirected) {
-            window.location.href = response.url;
-          }
-        } catch (error) {
-          console.error("Error authenticating:", error);
-          setIsAuthenticating(false);
-        }
+    try {
+      setIsAuthenticating(true);
+      const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
+      const encodedMessage = new TextEncoder().encode(message);
+      const signature = await signMessage?.(encodedMessage);
+      
+      if (!signature) {
+        throw new Error("Failed to sign message");
       }
-    };
 
-    authenticate();
+      const form = new FormData();
+      form.append("publicKey", publicKey.toBase58());
+      form.append("signature", Array.from(signature).toString());
+      form.append("message", message);
+      form.append("nonce", nonce);
+
+      const response = await fetch("/login", {
+        method: "POST",
+        body: form,
+      });
+
+      if (response.redirected) {
+        window.location.href = response.url;
+      }
+    } catch (error) {
+      console.error("Error authenticating:", error);
+    } finally {
+      setIsAuthenticating(false);
+    }
   }, [connected, publicKey, signMessage, nonce, isAuthenticating]);
 
   return (
@@ -81,6 +86,16 @@ export default function SolanaLogin() {
 
         <div className="mt-8 space-y-4">
           <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
+          
+          {connected && publicKey && (
+            <button
+              onClick={handleSignIn}
+              disabled={isAuthenticating}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isAuthenticating ? "Signing..." : "Sign to Login"}
+            </button>
+          )}
         </div>
       </div>
     </div>
