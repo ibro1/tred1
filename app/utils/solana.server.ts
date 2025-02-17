@@ -29,18 +29,35 @@ export async function verifySignature(
   publicKey: string
 ): Promise<boolean> {
   try {
+    console.log("Debug - Starting signature verification with:", {
+      messageLength: message.length,
+      message,
+      signatureFormat: signature.slice(0, 50) + "...",
+      publicKey
+    });
+
     const encodedMessage = new TextEncoder().encode(message);
     const signatureUint8 = Uint8Array.from(signature.split(',').map(Number));
     const publicKeyUint8 = bs58.decode(publicKey);
 
-    return nacl.verify(
-      signatureUint8,
+    console.log("Debug - Converted parameters:", {
+      encodedMessageLength: encodedMessage.length,
+      signatureBytes: signatureUint8.length,
+      publicKeyBytes: publicKeyUint8.length
+    });
+
+    // Use nacl.sign.detached.verify instead of nacl.verify
+    const verified = nacl.sign.detached.verify(
       encodedMessage,
+      signatureUint8,
       publicKeyUint8
     );
+
+    console.log("Debug - Verification result:", verified);
+    return verified;
   } catch (error) {
-    console.error("Error verifying signature:", error);
-    return false;
+    console.error("Error in verifySignature:", error);
+    throw new Error(`Signature verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
