@@ -2,6 +2,7 @@ import { AuthorizationError } from "remix-auth";
 import { Strategy } from "remix-auth";
 import { db } from "~/libs/db.server";
 import { generateNonce, verifySignature } from "~/utils/solana.server";
+import type { UserSession } from "~/services/auth.server";
 
 export interface SolanaStrategyVerifyParams {
   publicKey: string;
@@ -37,14 +38,14 @@ async function ensureUniqueUsername(baseUsername: string): Promise<string> {
   }
 }
 
-export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
+export class SolanaStrategy extends Strategy<UserSession, SolanaStrategyVerifyParams> {
   name = "solana";
 
   async authenticate(
     request: Request,
     sessionStorage: any,
     options: any
-  ): Promise<any> {
+  ): Promise<UserSession> {
     try {
       const form = await request.formData();
       const publicKey = form.get("publicKey")?.toString();
@@ -107,6 +108,12 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
       // Find or create user
       let user = await db.user.findUnique({
         where: { walletAddress: publicKey },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          walletAddress: true,
+        },
       });
 
       if (!user) {
@@ -120,23 +127,27 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
             email: email || "",
             fullname: fullname || "",
             walletAddress: publicKey,
-            // authStrategy: "solana",
+          },
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            walletAddress: true,
           },
         });
       }
 
-      if (!user) {
+      if (!user?.id) {
         throw new AuthorizationError("Failed to create or retrieve user");
       }
 
       console.log("Debug - Authentication successful for user:", user.id);
 
+      // Return the session data
       return {
         id: user.id,
-        // walletAddress: user.walletAddress,
-        // email: user.email,
-        // username: user.username,
       };
+
     } catch (error) {
       console.error("Authentication error details:", error);
       
