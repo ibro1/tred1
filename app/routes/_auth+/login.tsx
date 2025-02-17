@@ -1,10 +1,10 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useFetcher } from "@remix-run/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Check if user is already authenticated
@@ -41,8 +41,7 @@ export default function SolanaLogin() {
   const { publicKey, signMessage, connected } = useWallet();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const MAX_RETRIES = 3;
+  const fetcher = useFetcher();
 
   const handleSignIn = useCallback(async () => {
     if (!connected || !publicKey || isAuthenticating) return;
@@ -58,46 +57,22 @@ export default function SolanaLogin() {
         throw new Error("Failed to sign message");
       }
 
-      const formData = new FormData();
-      formData.append("publicKey", publicKey.toBase58());
-      formData.append("signature", Array.from(signature).toString());
-      formData.append("message", message);
-      formData.append("nonce", nonce);
-
-      const response = await fetch("", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Authentication failed");
-      }
-
-      // Reset retry count on success
-      setRetryCount(0);
-
-      if (response.redirected) {
-        window.location.href = response.url;
-      }
+      fetcher.submit(
+        {
+          publicKey: publicKey.toBase58(),
+          signature: Array.from(signature).toString(),
+          message,
+          nonce,
+        },
+        { method: "post" }
+      );
     } catch (error) {
-      console.error("Error authenticating:", error);
-      setError(error instanceof Error ? error.message : "Authentication failed");
-      
-      // Increment retry count on failure
-      setRetryCount((prev) => prev + 1);
+      console.error("Error signing message:", error);
+      setError(error instanceof Error ? error.message : "Failed to sign message");
     } finally {
       setIsAuthenticating(false);
     }
-  }, [connected, publicKey, signMessage, nonce, isAuthenticating]);
-
-  // Automatically trigger sign-in when wallet connects
-  useEffect(() => {
-    if (connected && publicKey && !isAuthenticating && retryCount === 0) {
-      handleSignIn();
-    }
-  }, [connected, publicKey, handleSignIn, isAuthenticating, retryCount]);
+  }, [connected, publicKey, signMessage, nonce, isAuthenticating, fetcher]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
@@ -119,20 +94,6 @@ export default function SolanaLogin() {
                   <p className="text-sm font-medium text-red-800">
                     {error || actionData?.error}
                   </p>
-                  {retryCount > 0 && retryCount < MAX_RETRIES && (
-                    <button
-                      onClick={handleSignIn}
-                      disabled={isAuthenticating}
-                      className="mt-2 text-sm font-medium text-red-600 hover:text-red-500"
-                    >
-                      Click to retry ({MAX_RETRIES - retryCount} attempts remaining)
-                    </button>
-                  )}
-                  {retryCount >= MAX_RETRIES && (
-                    <p className="mt-2 text-sm text-red-600">
-                      Too many failed attempts. Please disconnect and try again.
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -142,9 +103,27 @@ export default function SolanaLogin() {
         <div className="mt-8 space-y-4">
           <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
           
-          {isAuthenticating && (
-            <div className="text-center text-sm text-gray-600">
-              Please sign the message in your wallet...
+          {connected && publicKey && (
+            <button
+              onClick={handleSignIn}
+              disabled={isAuthenticating || fetcher.state !== "idle"}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isAuthenticating ? "Signing..." : 
+               fetcher.state !== "idle" ? "Authenticating..." : 
+               "Sign to Login"}
+            </button>
+          )}
+
+          {(error || actionData?.error || fetcher.data?.error) && (
+            <div className="mt-4 rounded-md bg-red-50 p-4">
+              <div className="flex">
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-red-800">
+                    {error || fetcher.data?.error || actionData?.error}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
