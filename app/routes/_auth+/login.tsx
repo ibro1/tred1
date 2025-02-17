@@ -117,19 +117,19 @@ export default function SolanaLogin() {
         </div>
 
         <div className="mt-8 space-y-4">
-          <WalletMultiButton
-            className={`w-full rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              connected ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' : 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
-            }`}
-          >
-            {connected ? 'Connected' : 'Connect Wallet'}
-          </WalletMultiButton>
-
-          {useEffect(() => {
-            if (connected && publicKey && !isAuthenticating) {
-              handleSignIn();
-            }
-          }, [connected, publicKey, handleSignIn, isAuthenticating])}
+          <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
+          
+          {connected && publicKey && (
+            <button
+              onClick={handleSignIn}
+              disabled={isAuthenticating || fetcher.state !== "idle"}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isAuthenticating ? "Signing..." : 
+               fetcher.state !== "idle" ? "Authenticating..." : 
+               "Sign to Login"}
+            </button>
+          )}
 
           {(error || actionData?.error || fetcher.data?.error) && (
             <div className="mt-4 rounded-md bg-red-50 p-4">
