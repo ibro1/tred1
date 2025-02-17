@@ -1,5 +1,5 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData } from "@remix-run/react";
+import { useLoaderData, useActionData, Form } from "@remix-run/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
@@ -58,34 +58,22 @@ export default function SolanaLogin() {
         throw new Error("Failed to sign message");
       }
 
-      const formData = new FormData();
-      formData.append("publicKey", publicKey.toBase58());
-      formData.append("signature", Array.from(signature).toString());
-      formData.append("message", message);
-      formData.append("nonce", nonce);
-
-      const response = await fetch("", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Authentication failed");
-      }
+      // Get the form element and submit it programmatically
+      const form = document.getElementById('login-form') as HTMLFormElement;
+      const formData = new FormData(form);
+      formData.set("publicKey", publicKey.toBase58());
+      formData.set("signature", Array.from(signature).toString());
+      formData.set("message", message);
+      formData.set("nonce", nonce);
+      
+      // Submit the form using the native submit method
+      form.submit();
 
       // Reset retry count on success
       setRetryCount(0);
-
-      if (response.redirected) {
-        window.location.href = response.url;
-      }
     } catch (error) {
       console.error("Error authenticating:", error);
       setError(error instanceof Error ? error.message : "Authentication failed");
-      
-      // Increment retry count on failure
       setRetryCount((prev) => prev + 1);
     } finally {
       setIsAuthenticating(false);
@@ -139,7 +127,7 @@ export default function SolanaLogin() {
           )}
         </div>
 
-        <div className="mt-8 space-y-4">
+        <Form method="post" id="login-form" className="mt-8 space-y-4">
           <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
           
           {isAuthenticating && (
@@ -147,7 +135,7 @@ export default function SolanaLogin() {
               Please sign the message in your wallet...
             </div>
           )}
-        </div>
+        </Form>
       </div>
     </div>
   );
