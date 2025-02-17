@@ -47,10 +47,12 @@ export default function SolanaLogin() {
   const { publicKey, signMessage, connected } = useWallet();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const fetcher = useFetcher();
+  const MAX_RETRIES = 3;
 
   const handleSignIn = useCallback(async () => {
-    if (!connected || !publicKey || isAuthenticating) return;
+    if (!connected || !publicKey || isAuthenticating || retryCount >= MAX_RETRIES) return;
 
     try {
       setIsAuthenticating(true);
@@ -70,23 +72,34 @@ export default function SolanaLogin() {
           message,
           nonce,
         },
-        { 
-          method: "post",
-          action: "/login"
-        }
+        { method: "post" }
       );
     } catch (error) {
       console.error("Error signing message:", error);
       setError(error instanceof Error ? error.message : "Failed to sign message");
+      setRetryCount(prev => prev + 1);
     } finally {
       setIsAuthenticating(false);
     }
-  }, [connected, publicKey, signMessage, nonce, isAuthenticating, fetcher]);
+  }, [connected, publicKey, signMessage, nonce, isAuthenticating, fetcher, retryCount]);
 
+  // Automatically trigger sign-in when wallet connects
   useEffect(() => {
-    if (fetcher.type === "done" && fetcher.data === null) {
-      // No data means we got a redirect response - reload to follow it
-      window.location.reload();
+    if (connected && publicKey && !isAuthenticating && retryCount < MAX_RETRIES) {
+      handleSignIn();
+    }
+  }, [connected, publicKey, handleSignIn, isAuthenticating, retryCount]);
+
+  // Handle fetcher states
+  useEffect(() => {
+    if (fetcher.type === "done") {
+      if (fetcher.data?.error) {
+        setError(fetcher.data.error);
+        setRetryCount(prev => prev + 1);
+      } else if (!fetcher.data) {
+        // No data means successful redirect
+        window.location.reload();
+      }
     }
   }, [fetcher]);
 
@@ -98,17 +111,24 @@ export default function SolanaLogin() {
           <p className="mt-2 text-sm text-gray-600">
             Connect your wallet to continue
           </p>
-          {(error || actionData?.error) && (
+          
+          {retryCount >= MAX_RETRIES ? (
+            <div className="mt-4 rounded-md bg-red-50 p-4">
+              <p className="text-sm font-medium text-red-800">
+                Too many failed attempts. Please disconnect and try again.
+              </p>
+            </div>
+          ) : (error || actionData?.error) && (
             <div className="mt-4 rounded-md bg-red-50 p-4">
               <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-red-800">
                     {error || actionData?.error}
+                    {retryCount > 0 && retryCount < MAX_RETRIES && (
+                      <span className="block mt-1">
+                        Attempts remaining: {MAX_RETRIES - retryCount}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -119,27 +139,9 @@ export default function SolanaLogin() {
         <div className="mt-8 space-y-4">
           <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
           
-          {connected && publicKey && (
-            <button
-              onClick={handleSignIn}
-              disabled={isAuthenticating || fetcher.state !== "idle"}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {isAuthenticating ? "Signing..." : 
-               fetcher.state !== "idle" ? "Authenticating..." : 
-               "Sign to Login"}
-            </button>
-          )}
-
-          {(error || actionData?.error || fetcher.data?.error) && (
-            <div className="mt-4 rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-red-800">
-                    {error || fetcher.data?.error || actionData?.error}
-                  </p>
-                </div>
-              </div>
+          {isAuthenticating && (
+            <div className="text-center text-sm text-gray-600">
+              Please sign the message in your wallet...
             </div>
           )}
         </div>
