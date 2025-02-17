@@ -1,5 +1,5 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, useSubmit } from "@remix-run/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
@@ -44,6 +44,8 @@ export default function SolanaLogin() {
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
 
+  const submit = useSubmit();
+  
   const handleSignIn = useCallback(async () => {
     if (!connected || !publicKey || isAuthenticating) return;
 
@@ -58,34 +60,30 @@ export default function SolanaLogin() {
         throw new Error("Failed to sign message");
       }
 
-      // Get the form element and submit it programmatically
-      const form = document.getElementById('login-form') as HTMLFormElement;
-      const formData = new FormData(form);
-      formData.set("publicKey", publicKey.toBase58());
-      formData.set("signature", Array.from(signature).toString());
-      formData.set("message", message);
-      formData.set("nonce", nonce);
-      
-      // Submit the form using the native submit method
-      form.submit();
+      const formData = new FormData();
+      formData.append("publicKey", publicKey.toBase58());
+      formData.append("signature", Array.from(signature).toString());
+      formData.append("message", message);
+      formData.append("nonce", nonce);
 
-      // Reset retry count on success
+      submit(formData, { method: "post" });
+      // Reset retry count on submission
       setRetryCount(0);
     } catch (error) {
-      console.error("Error authenticating:", error);
-      setError(error instanceof Error ? error.message : "Authentication failed");
+      console.error("Error signing message:", error);
+      setError(error instanceof Error ? error.message : "Failed to sign message");
+      // Increment retry count on failure
       setRetryCount((prev) => prev + 1);
-    } finally {
       setIsAuthenticating(false);
     }
-  }, [connected, publicKey, signMessage, nonce, isAuthenticating]);
+  }, [connected, publicKey, signMessage, nonce, isAuthenticating, submit]);
 
-  // Automatically trigger sign-in when wallet connects
+  // Attempt sign-in when wallet connects, with retry handling
   useEffect(() => {
-    if (connected && publicKey && !isAuthenticating && retryCount === 0) {
+    if (connected && publicKey && !isAuthenticating && retryCount < MAX_RETRIES) {
       handleSignIn();
     }
-  }, [connected, publicKey, handleSignIn, isAuthenticating, retryCount]);
+  }, [connected, publicKey, handleSignIn, isAuthenticating, retryCount, MAX_RETRIES]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
@@ -93,7 +91,7 @@ export default function SolanaLogin() {
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-900">Connect with Solana</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Connect your wallet to continue
+            {connected ? 'Authenticating...' : 'Connect your wallet to continue'}
           </p>
           {(error || actionData?.error) && (
             <div className="mt-4 rounded-md bg-red-50 p-4">
@@ -127,15 +125,19 @@ export default function SolanaLogin() {
           )}
         </div>
 
-        <Form method="post" id="login-form" className="mt-8 space-y-4">
-          <WalletMultiButton className="w-full rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2" />
+        <div className="mt-8 space-y-4">
+          <WalletMultiButton
+            className={`w-full rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              connected ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' : 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
+            } ${isAuthenticating ? 'opacity-50 cursor-not-allowed' : ''}`}
+          />
           
           {isAuthenticating && (
             <div className="text-center text-sm text-gray-600">
-              Please sign the message in your wallet...
+              Please check your wallet to sign the message...
             </div>
           )}
-        </Form>
+        </div>
       </div>
     </div>
   );
