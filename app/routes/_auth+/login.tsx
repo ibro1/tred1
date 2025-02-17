@@ -13,7 +13,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (user) {
     throw new Response(null, {
       status: 302,
-      headers: { Location: "/dashboard" },
+      headers: { Location: "/user/dashboard" },
     });
   }
   const nonce = await generateNonce();
@@ -24,7 +24,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     // This will return a redirect response if successful
     return await authService.authenticate("form", request, {
-      successRedirect: "/dashboard",
+      successRedirect: "/user/dashboard",
       failureRedirect: "/login",
     });
   } catch (error) {
