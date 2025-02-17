@@ -21,11 +21,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    const user = await authService.authenticate("solana", request, {
+    await authService.authenticate("form", request, {
       successRedirect: "/dashboard",
       failureRedirect: "/login",
     });
-    return json({ user });
+    return null
   } catch (error) {
     console.error("Authentication error:", error);
     return json(
