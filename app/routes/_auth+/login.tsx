@@ -22,11 +22,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   try {
     await authService.authenticate("form", request, {
-      successRedirect: "/dashboard",
+      successRedirect: "/user/dashboard",
       failureRedirect: "/login",
     });
     return null
   } catch (error) {
+    if (error instanceof Response && error.status === 302) {
+      return error;
+    }
+
     console.error("Authentication error:", error);
     return json(
       { error: error instanceof Error ? error.message : "Authentication failed" },
