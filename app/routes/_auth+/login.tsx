@@ -1,10 +1,10 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
+import { json, redirect, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useFetcher } from "@remix-run/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { createTimer } from "~/utils/timer"
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -21,18 +21,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const timer = createTimer()
-  const clonedRequest = request.clone()
-  const formData = await clonedRequest.formData()
-  
   try {
-    await authService.authenticate("form", request, {
+    // This will return a redirect response if successful
+    return await authService.authenticate("form", request, {
       successRedirect: "/dashboard",
+      failureRedirect: "/login",
     });
-    
-    // The function above will handle the redirect if successful
-    return null;
   } catch (error) {
+    // If it's a redirect response, return it (it means authentication succeeded)
+    if (error instanceof Response && error.status === 302) {
+      return error;
+    }
+
     console.error("Authentication error:", error);
     return json(
       { error: error instanceof Error ? error.message : "Authentication failed" },
@@ -70,7 +70,10 @@ export default function SolanaLogin() {
           message,
           nonce,
         },
-        { method: "post" }
+        { 
+          method: "post",
+          action: "/login"
+        }
       );
     } catch (error) {
       console.error("Error signing message:", error);
@@ -79,6 +82,13 @@ export default function SolanaLogin() {
       setIsAuthenticating(false);
     }
   }, [connected, publicKey, signMessage, nonce, isAuthenticating, fetcher]);
+
+  useEffect(() => {
+    if (fetcher.type === "done" && fetcher.data === null) {
+      // No data means we got a redirect response - reload to follow it
+      window.location.reload();
+    }
+  }, [fetcher]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
