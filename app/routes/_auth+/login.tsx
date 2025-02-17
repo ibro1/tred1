@@ -64,38 +64,23 @@ export default function SolanaLogin() {
       formData.append("message", message);
       formData.append("nonce", nonce);
 
-      const response = await fetch("/login", {
+      const response = await fetch("", {
         method: "POST",
         body: formData,
-        headers: {
-          Accept: "application/json",
-        },
       });
 
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          const data = await response.json();
-          throw new Error(data.error || "Authentication failed");
-        } else {
-          throw new Error("Server error occurred. Please try again.");
-        }
-      }
+      const data = await response.json();
 
-      // Handle successful response
-      if (response.redirected) {
-        window.location.href = response.url;
-      } else {
-        const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        // If we have a successful response but no redirect, redirect to dashboard
-        window.location.href = "/dashboard";
+      if (!response.ok) {
+        throw new Error(data.error || "Authentication failed");
       }
 
       // Reset retry count on success
       setRetryCount(0);
+
+      if (response.redirected) {
+        window.location.href = response.url;
+      }
     } catch (error) {
       console.error("Error authenticating:", error);
       setError(error instanceof Error ? error.message : "Authentication failed");
