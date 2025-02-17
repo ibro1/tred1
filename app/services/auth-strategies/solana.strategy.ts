@@ -45,63 +45,75 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
     sessionStorage: any,
     options: any
   ): Promise<any> {
-    const form = await request.formData();
-    const publicKey = form.get("publicKey")?.toString();
-    const signature = form.get("signature")?.toString();
-    const message = form.get("message")?.toString();
-    const nonce = form.get("nonce")?.toString();
-    const email = form.get("email")?.toString();
-    const fullname = form.get("fullname")?.toString();
-
-    if (!publicKey || !signature || !message || !nonce) {
-      throw new AuthorizationError("Missing credentials");
-    }
-
     try {
+      const form = await request.formData();
+      const publicKey = form.get("publicKey")?.toString();
+      const signature = form.get("signature")?.toString();
+      const message = form.get("message")?.toString();
+      const nonce = form.get("nonce")?.toString();
+      const email = form.get("email")?.toString();
+      const fullname = form.get("fullname")?.toString();
+
+      // Validate input parameters
+      if (!publicKey) throw new AuthorizationError("Public key is required");
+      if (!signature) throw new AuthorizationError("Signature is required");
+      if (!message) throw new AuthorizationError("Message is required");
+      if (!nonce) throw new AuthorizationError("Nonce is required");
+
+      console.log("Debug - Received params:", {
+        publicKey,
+        messageLength: message?.length,
+        signatureLength: signature?.length,
+        nonce,
+      });
+
       // Verify the nonce
       const storedNonce = await db.nonce.findUnique({
         where: { value: nonce },
       });
 
       if (!storedNonce) {
-        throw new AuthorizationError("Invalid nonce");
+        console.error("Nonce not found in database:", nonce);
+        throw new AuthorizationError("Invalid or expired nonce");
       }
 
       // Check if nonce is expired (5 minutes)
       const now = new Date();
-      if (now.getTime() - storedNonce.createdAt.getTime() > 5 * 60 * 1000) {
+      const nonceAge = now.getTime() - storedNonce.createdAt.getTime();
+      if (nonceAge > 5 * 60 * 1000) {
+        console.error("Nonce expired. Age:", nonceAge, "ms");
         await db.nonce.delete({ where: { value: nonce } });
-        throw new AuthorizationError("Nonce expired");
+        throw new AuthorizationError("Authentication timeout - please try again");
       }
 
       // Verify the signature
+      console.log("Debug - Verifying signature...");
       const isValid = await verifySignature(message, signature, publicKey);
+      
       if (!isValid) {
-        throw new AuthorizationError("Invalid signature");
+        console.error("Signature verification failed for:", {
+          message,
+          publicKey,
+          signatureLength: signature.length,
+        });
+        throw new AuthorizationError("Invalid signature - please try signing again");
       }
+
+      console.log("Debug - Signature verified successfully");
 
       // Delete the used nonce
       await db.nonce.delete({ where: { value: nonce } });
 
-      // Find existing user
+      // Find or create user
       let user = await db.user.findUnique({
         where: { walletAddress: publicKey },
       });
 
-      if (user) {
-        // Existing user - just return the user data
-        return {
-          id: user.id,
-          walletAddress: user.walletAddress,
-          email: user.email,
-          username: user.username,
-        };
-      } else {
-        // Generate unique username
+      if (!user) {
+        console.log("Debug - Creating new user for wallet:", publicKey);
         const baseUsername = generateUsername(publicKey);
         const username = await ensureUniqueUsername(baseUsername);
 
-        // Create new user
         user = await db.user.create({
           data: {
             username,
@@ -111,21 +123,37 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
             authStrategy: "solana",
           },
         });
-
-        return {
-          id: user.id,
-          walletAddress: user.walletAddress,
-          email: user.email,
-          username: user.username,
-        };
       }
+
+      if (!user) {
+        throw new AuthorizationError("Failed to create or retrieve user");
+      }
+
+      console.log("Debug - Authentication successful for user:", user.id);
+
+      return {
+        id: user.id,
+        walletAddress: user.walletAddress,
+        email: user.email,
+        username: user.username,
+      };
     } catch (error) {
+      console.error("Authentication error details:", error);
+      
       if (error instanceof AuthorizationError) {
         throw error;
       }
-      throw new AuthorizationError(
-        error instanceof Error ? error.message : "Failed to authenticate with Solana"
-      );
+      
+      // Handle specific error types
+      if (error instanceof TypeError) {
+        throw new AuthorizationError("Invalid data format received");
+      }
+      
+      if (error instanceof Error) {
+        throw new AuthorizationError(`Authentication failed: ${error.message}`);
+      }
+
+      throw new AuthorizationError("An unexpected error occurred during authentication");
     }
   }
 }
