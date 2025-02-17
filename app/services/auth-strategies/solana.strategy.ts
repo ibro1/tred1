@@ -120,7 +120,7 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
             email: email || "",
             fullname: fullname || "",
             walletAddress: publicKey,
-            authStrategy: "solana",
+            // authStrategy: "solana",
           },
         });
       }
