@@ -143,6 +143,7 @@ export class SolanaStrategy extends Strategy<UserSession, SolanaStrategyVerifyPa
 
       console.log("Debug - Authentication successful for user:", user.id);
 
+      console.log("Debug - Saving session data...");
       // Return the session data
       return {
         id: user.id,
