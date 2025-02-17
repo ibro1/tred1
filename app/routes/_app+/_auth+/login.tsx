@@ -1,5 +1,5 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData } from "@remix-run/react";
+import { useLoaderData, useActionData, Form } from "@remix-run/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
@@ -36,12 +36,14 @@ export default function SolanaLogin() {
   const actionData = useActionData<typeof action>();
   const { publicKey, signMessage, connected } = useWallet();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSignIn = useCallback(async () => {
     if (!connected || !publicKey || isAuthenticating) return;
 
     try {
       setIsAuthenticating(true);
+      setError(null);
       const message = `Sign this message to authenticate with our app. Nonce: ${nonce}`;
       const encodedMessage = new TextEncoder().encode(message);
       const signature = await signMessage?.(encodedMessage);
@@ -50,22 +52,29 @@ export default function SolanaLogin() {
         throw new Error("Failed to sign message");
       }
 
-      const form = new FormData();
-      form.append("publicKey", publicKey.toBase58());
-      form.append("signature", Array.from(signature).toString());
-      form.append("message", message);
-      form.append("nonce", nonce);
+      const formData = new FormData();
+      formData.append("publicKey", publicKey.toBase58());
+      formData.append("signature", Array.from(signature).toString());
+      formData.append("message", message);
+      formData.append("nonce", nonce);
 
-      const response = await fetch("/login", {
+      const response = await fetch("", {
         method: "POST",
-        body: form,
+        body: formData,
       });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Authentication failed");
+      }
 
       if (response.redirected) {
         window.location.href = response.url;
       }
     } catch (error) {
       console.error("Error authenticating:", error);
+      setError(error instanceof Error ? error.message : "Authentication failed");
     } finally {
       setIsAuthenticating(false);
     }
@@ -79,8 +88,21 @@ export default function SolanaLogin() {
           <p className="mt-2 text-sm text-gray-600">
             Choose how you want to connect your Solana wallet
           </p>
-          {actionData?.error && (
-            <p className="mt-2 text-sm text-red-600">{actionData.error}</p>
+          {(error || actionData?.error) && (
+            <div className="mt-4 rounded-md bg-red-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-red-800">
+                    {error || actionData?.error}
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
