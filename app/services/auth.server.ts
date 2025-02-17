@@ -17,7 +17,6 @@ export const AuthStrategies = {
   SOLANA: "solana",
 } as const;
 
-export type AuthStrategy = (typeof AuthStrategies)[keyof typeof AuthStrategies];
 
 export const authStorage = createCookieSessionStorage({
   cookie: {
@@ -44,6 +43,9 @@ export interface UserSession {
  */
 export interface UserData
   extends NonNullable<Prisma.PromiseReturnType<typeof modelUser.getForSession>> {}
+
+  
+export type AuthStrategy = (typeof AuthStrategies)[keyof typeof AuthStrategies]
 
 /**
  * authService

@@ -5,6 +5,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { generateNonce } from "~/utils/solana.server";
 import { authService } from "~/services/auth.server";
 import { useCallback, useState } from "react";
+import { createTimer } from "~/utils/timer"
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Check if user is already authenticated
@@ -20,37 +21,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const form = await request.formData();
-  const signature = form.get("signature")?.toString();
-   
-  // Convert signature string back to Uint8Array
-  const signatureArray = signature?.split(',').map(Number);
-  const properSignature = signatureArray ? new Uint8Array(signatureArray) : null;
+  const timer = createTimer()
+  const clonedRequest = request.clone()
+  const formData = await clonedRequest.formData()
   
-  if (!properSignature) {
-    return json({ error: "Invalid signature format" }, { status: 400 });
-  }
-
-    // Update form data with proper signature format
-    const updatedForm = new FormData();
-    form.forEach((value, key) => {
-      if (key === "signature") {
-        updatedForm.append(key, properSignature.toString());
-      } else {
-        updatedForm.append(key, value.toString());
-      }
-    });
-  
-    const clonedRequest = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: updatedForm,
-    });
-
   try {
-    await authService.authenticate("solana", clonedRequest, {
+    await authService.authenticate("form", request, {
       successRedirect: "/dashboard",
-      failureRedirect: "/login",
     });
     
     // The function above will handle the redirect if successful

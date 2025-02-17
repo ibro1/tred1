@@ -38,6 +38,7 @@ async function ensureUniqueUsername(baseUsername: string): Promise<string> {
   }
 }
 
+
 export class SolanaStrategy extends Strategy<UserSession, SolanaStrategyVerifyParams> {
   name = "solana";
 
@@ -55,6 +56,7 @@ export class SolanaStrategy extends Strategy<UserSession, SolanaStrategyVerifyPa
       const email = form.get("email")?.toString();
       const fullname = form.get("fullname")?.toString();
 
+      
       // Validate input parameters
       if (!publicKey) throw new AuthorizationError("Public key is required");
       if (!signature) throw new AuthorizationError("Signature is required");
