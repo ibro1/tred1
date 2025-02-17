@@ -133,9 +133,9 @@ export class SolanaStrategy extends Strategy<any, SolanaStrategyVerifyParams> {
 
       return {
         id: user.id,
-        walletAddress: user.walletAddress,
-        email: user.email,
-        username: user.username,
+        // walletAddress: user.walletAddress,
+        // email: user.email,
+        // username: user.username,
       };
     } catch (error) {
       console.error("Authentication error details:", error);
